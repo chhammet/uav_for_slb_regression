@@ -1,0 +1,15 @@
+name: uav_regression_env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - tensorflow-gpu
+  - pandas
+  - numpy
+  - matplotlib
+  - scikit-learn
+  - pillow
+  - pip
+  - pip:
+      - pathlib
