@@ -1,0 +1,12 @@
+name: drone-analysis
+channels:
+  - defaults
+dependencies:
+  - python=3.9
+  - pytorch
+  - torchvision
+  - pillow
+  - matplotlib
+  - pandas
+  - scikit-learn
+prefix: /Users/thomasbernabe/anaconda3/envs/drone-analysis
