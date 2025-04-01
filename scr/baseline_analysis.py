@@ -18,35 +18,18 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class ImageDatasetFromDF(Dataset):
-    """
-    Custom dataset class for drone images using a DataFrame
-    """
     def __init__(self, image_directory, dataframe, transform=None):
         self.image_directory = image_directory
         self.transform = transform
-        self.dataframe = dataframe
-
-        self.valid_indices = []
-        self.matched_files = []
-
-        for i, row in self.dataframe.iterrows():
-            image_filename = row['image']
-            image_path = os.path.join(self.image_directory, image_filename)
-            if os.path.isfile(image_path):
-                self.valid_indices.append(i)
-                self.matched_files.append(image_filename)
-
-        logger.info(f"Successfully matched {len(self.valid_indices)} images with DataFrame entries")
-
-        self.index_mapping = {new_idx: org_idx for new_idx, org_idx in enumerate(self.valid_indices)}
+        self.dataframe = dataframe.reset_index(drop=True)
 
     def __len__(self):
-        return len(self.valid_indices)
+        return len(self.dataframe)
 
     def __getitem__(self, idx):
-        df_idx = self.index_mapping[idx]
-        image_score = self.dataframe.iloc[df_idx]['score']
-        image_filename = self.matched_files[idx]
+        row = self.dataframe.iloc[idx]
+        image_filename = str(row['image'])
+        image_score = row['score']
 
         image_path = os.path.join(self.image_directory, image_filename)
         image = Image.open(image_path).convert('RGB')
@@ -55,6 +38,7 @@ class ImageDatasetFromDF(Dataset):
             image = self.transform(image)
 
         return image, torch.tensor(image_score, dtype=torch.float32)
+
 
 
 def create_transforms():
@@ -77,7 +61,7 @@ def create_transforms():
     return train_transform, test_transform
 
 
-def split_training_data(image_directory, csv_file, batch_size=32):
+def split_training_data(image_directory, csv_file, batch_size=256):
     train_transform, test_transform = create_transforms()
 
     df = pd.read_csv(csv_file)
@@ -91,9 +75,21 @@ def split_training_data(image_directory, csv_file, batch_size=32):
     val_dataset = ImageDatasetFromDF(image_directory, val_df, transform=test_transform)
     test_dataset = ImageDatasetFromDF(image_directory, test_df, transform=test_transform)
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
+    train_loader = DataLoader(
+    train_dataset, batch_size=batch_size, shuffle=True,
+    num_workers=8, pin_memory=True, persistent_workers=True
+    )
+
+    val_loader = DataLoader(
+    val_dataset, batch_size=batch_size, shuffle=False,
+    num_workers=8, pin_memory=True, persistent_workers=True
+    )
+
+    test_loader = DataLoader(
+    test_dataset, batch_size=batch_size, shuffle=False,
+    num_workers=8, pin_memory=True, persistent_workers=True
+    )
+
 
     return train_loader, val_loader, test_loader
 
@@ -101,9 +97,9 @@ def split_training_data(image_directory, csv_file, batch_size=32):
 
 if __name__ == "__main__":
     image_directory = "/mnt/research-projects/j/jlgage/RawUAVData01/data/images"
-    csv_file = "/mnt/research-projects/j/jlgage/RawUAVData01/data/all_scored_images.csv"
+    csv_file = "/mnt/research-projects/j/jlgage/RawUAVData01/data/all_scored_images_clean.csv"
 
-    train_loader, val_loader, test_loader = split_training_data(image_directory, csv_file, batch_size=32)
+    train_loader, val_loader, test_loader = split_training_data(image_directory, csv_file, batch_size=256)
 
     logger.info("Data loaders created successfully")
     logger.info(f"Training samples: {len(train_loader.dataset)}")

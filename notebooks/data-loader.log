@@ -1,0 +1,7 @@
+2025-03-31 19:26:43,417 - baseline_analysis - INFO - Data split: Train=6881, Validation=1475, Test=1475
+2025-03-31 19:26:51,794 - baseline_analysis - INFO - Successfully matched 6881 images with DataFrame entries
+2025-03-31 19:26:53,245 - baseline_analysis - INFO - Successfully matched 1475 images with DataFrame entries
+2025-03-31 19:26:55,424 - baseline_analysis - INFO - Successfully matched 1475 images with DataFrame entries
+2025-03-31 19:30:55,899 - baseline_analysis - INFO - Data split: Train=6881, Validation=1475, Test=1475
+2025-03-31 19:31:04,761 - baseline_analysis - INFO - Data split: Train=6881, Validation=1475, Test=1475
+2025-03-31 19:37:17,564 - baseline_analysis - INFO - Data split: Train=6881, Validation=1475, Test=1475
