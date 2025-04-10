@@ -61,7 +61,7 @@ def create_transforms():
     return train_transform, test_transform
 
 
-def split_training_data(image_directory, csv_file, batch_size=256):
+def split_training_data(image_directory, csv_file, batch_size=128):
     train_transform, test_transform = create_transforms()
 
     df = pd.read_csv(csv_file)
@@ -99,7 +99,7 @@ if __name__ == "__main__":
     image_directory = "/mnt/research-projects/j/jlgage/RawUAVData01/data/images"
     csv_file = "/mnt/research-projects/j/jlgage/RawUAVData01/data/all_scored_images_clean.csv"
 
-    train_loader, val_loader, test_loader = split_training_data(image_directory, csv_file, batch_size=256)
+    train_loader, val_loader, test_loader = split_training_data(image_directory, csv_file, batch_size=128)
 
     logger.info("Data loaders created successfully")
     logger.info(f"Training samples: {len(train_loader.dataset)}")

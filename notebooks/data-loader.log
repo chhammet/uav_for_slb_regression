@@ -14,3 +14,5 @@
 2025-04-01 16:06:00,286 - baseline_analysis - INFO - Data split: Train=6881, Validation=1475, Test=1475
 2025-04-01 16:07:21,541 - timm.models._builder - INFO - Loading pretrained weights from Hugging Face hub (timm/efficientnet_b0.ra_in1k)
 2025-04-01 16:07:22,083 - timm.models._hub - INFO - [timm/efficientnet_b0.ra_in1k] Safe alternative available for 'pytorch_model.bin' (as 'model.safetensors'). Loading weights using safetensors.
+2025-04-01 21:58:22,161 - baseline_analysis - INFO - Data split: Train=6881, Validation=1475, Test=1475
+2025-04-02 13:54:15,971 - baseline_analysis - INFO - Data split: Train=6881, Validation=1475, Test=1475

@@ -1,0 +1,9 @@
+CNN 
+
+Batchsize = 256, epochs = 8 (stopped earl7)
+    Validation RMSE: 1.3475
+    Spearman Correlation: 0.7042 (p-value: 0.0000)
+    Validation MAE: 1.0923
+    Validation R² Score: 0.2847
+
+Batchsize = 128, epochs = 
