@@ -1,15 +1,18 @@
 name: uav_regression_env
 channels:
-  - conda-forge
   - defaults
+  - conda-forge
 dependencies:
   - python=3.9
-  - tensorflow-gpu
+  - pip
   - pandas
   - numpy
   - matplotlib
   - scikit-learn
   - pillow
-  - pip
+  - seaborn
+  - scipy
+  - pytorch
+  - torchvision
   - pip:
-      - pathlib
+      - jupyter

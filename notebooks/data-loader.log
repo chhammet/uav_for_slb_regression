@@ -1,0 +1,16 @@
+2025-03-31 14:15:32,408 - baseline_analysis - INFO - Data split: Train=7157, Validation=1534, Test=1534
+2025-03-31 14:16:49,552 - baseline_analysis - INFO - Data split: Train=7157, Validation=1534, Test=1534
+2025-03-31 14:18:07,961 - baseline_analysis - INFO - Data split: Train=6881, Validation=1475, Test=1475
+2025-03-31 14:18:17,566 - baseline_analysis - INFO - Successfully matched 6881 images with DataFrame entries
+2025-03-31 14:18:19,878 - baseline_analysis - INFO - Successfully matched 1475 images with DataFrame entries
+2025-03-31 14:18:22,093 - baseline_analysis - INFO - Successfully matched 1475 images with DataFrame entries
+2025-03-31 14:22:51,425 - baseline_analysis - INFO - Data split: Train=6881, Validation=1475, Test=1475
+2025-03-31 14:22:56,045 - baseline_analysis - INFO - Successfully matched 6881 images with DataFrame entries
+2025-03-31 14:22:56,684 - baseline_analysis - INFO - Successfully matched 1475 images with DataFrame entries
+2025-03-31 14:22:57,527 - baseline_analysis - INFO - Successfully matched 1475 images with DataFrame entries
+2025-03-31 14:28:55,133 - baseline_analysis - INFO - Data split: Train=6881, Validation=1475, Test=1475
+2025-03-31 14:29:04,442 - baseline_analysis - INFO - Successfully matched 6881 images with DataFrame entries
+2025-03-31 14:29:07,215 - baseline_analysis - INFO - Successfully matched 1475 images with DataFrame entries
+2025-03-31 14:29:10,410 - baseline_analysis - INFO - Successfully matched 1475 images with DataFrame entries
+2025-03-31 14:34:02,394 - baseline_analysis - INFO - Total valid images after filtering: 9831
+2025-03-31 14:34:02,399 - baseline_analysis - INFO - Data split: Train=6881, Validation=1475, Test=1475
