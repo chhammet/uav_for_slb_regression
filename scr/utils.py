@@ -1,159 +1,68 @@
+import subprocess
 import torch
-import torch.nn as nn
-import torch.optim as optim
-import optuna
-import time
-import csv
 import os
 
-from torchvision import models
-from transformers import ViTModel, ViTConfig
-from baseline_analysis import split_training_data
-from utils import get_available_gpu, EarlyStopping
+def get_available_gpu():
+    """
+    Auto-detect the least busy GPU on the server and set it for torch.
+    """
+    try:
+        # Query nvidia-smi for GPU utilization
+        result = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=index,memory.used,memory.total", "--format=csv,nounits,noheader"],
+            encoding="utf-8"
+        )
+        # Parse output
+        gpu_stats = []
+        for line in result.strip().split("\n"):
+            index, mem_used, mem_total = map(int, line.split(","))
+            gpu_stats.append((index, mem_used, mem_total))
 
+        # Sort by least memory used
+        gpu_stats.sort(key=lambda x: x[1])  # sort by mem_used
+
+        # Pick first GPU
+        best_gpu = gpu_stats[0][0]
+
+        # Set CUDA_VISIBLE_DEVICES to use only this GPU
+        os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(best_gpu)
+
+        # Now only one GPU will be visible to PyTorch
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+        print(f"Selected GPU: {best_gpu} | Memory Used: {gpu_stats[0][1]} MB")
+        return device
+
+    except Exception as e:
+        print(f"GPU detection failed: {e}")
+        print("Defaulting to CPU.")
+        return torch.device("cpu")
+
+
+# Example usage
 device = get_available_gpu()
 
-# --- Baseline CNN ---
-class BaselineCNN(nn.Module):
-    def __init__(self, n_filters=16, dropout=0.25, num_layers=2):
-        super().__init__()
-        self.convs = nn.ModuleList()
-        in_channels = 3
-        for _ in range(num_layers):
-            self.convs.append(nn.Conv2d(in_channels, n_filters, kernel_size=3, padding=1))
-            in_channels = n_filters
-            n_filters *= 2
-        self.pool = nn.MaxPool2d(2)
-        self.flatten_dim = in_channels * 56 * 56
-        self.fc1 = nn.Linear(self.flatten_dim, 128)
-        self.dropout = nn.Dropout(dropout)
-        self.out = nn.Linear(128, 1)
+class EarlyStopping:
+    def __init__(self, patience=5, min_delta=0):
+        """
+        Args:
+            patience (int): How many epochs to wait after last improvement.
+            min_delta (float): Minimum change to count as improvement.
+        """
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.best_loss = None
+        self.early_stop = False
 
-    def forward(self, x):
-        for conv in self.convs:
-            x = self.pool(torch.relu(conv(x)))
-        x = torch.flatten(x, 1)
-        x = self.dropout(torch.relu(self.fc1(x)))
-        return self.out(x)
-
-# --- ViT Wrapper ---
-class ViTWrapper(nn.Module):
-    def __init__(self, vit_model, hidden_size):
-        super().__init__()
-        self.vit = vit_model
-        self.regressor = nn.Sequential(
-            nn.Dropout(0.1),
-            nn.Linear(hidden_size, 1)
-        )
-
-    def forward(self, x):
-        outputs = self.vit(pixel_values=x)
-        cls_token = outputs.last_hidden_state[:, 0, :]
-        return self.regressor(cls_token)
-
-# --- Model Builder ---
-def build_model(backbone, n_filters=16, dropout=0.25, num_layers=2, vit_dropout=0.1):
-    if backbone == "cnn":
-        return BaselineCNN(n_filters, dropout, num_layers)
-    elif backbone == "resnet18":
-        model = models.resnet18(weights=None)
-        model.fc = nn.Linear(model.fc.in_features, 1)
-        return model
-    elif backbone == "vit":
-        config = ViTConfig.from_pretrained("google/vit-base-patch16-224-in21k")
-        config.num_labels = 1
-        config.hidden_dropout_prob = vit_dropout
-        vit_model = ViTModel(config)
-        return ViTWrapper(vit_model, config.hidden_size)
-    else:
-        raise ValueError("Invalid backbone")
-
-# --- Objective Function ---
-def objective(trial):
-    backbone = trial.suggest_categorical("backbone", ["cnn", "resnet18", "vit"])
-    lr = trial.suggest_loguniform("lr", 1e-5, 1e-2)
-    weight_decay = trial.suggest_loguniform("weight_decay", 1e-6, 1e-2)
-    dropout = trial.suggest_uniform("dropout", 0.1, 0.5)
-    batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
-    n_filters = trial.suggest_categorical("n_filters", [16, 32, 64]) if backbone == "cnn" else None
-    num_layers = trial.suggest_int("num_layers", 1, 3) if backbone == "cnn" else None
-    vit_dropout = trial.suggest_uniform("vit_dropout", 0.1, 0.4) if backbone == "vit" else None
-
-    image_dir = "/mnt/research-projects/j/jlgage/RawUAVData01/data/images"
-    csv_path = "/mnt/research-projects/j/jlgage/RawUAVData01/data/all_scored_images_clean.csv"
-    train_loader, val_loader, _ = split_training_data(image_dir, csv_path, batch_size=batch_size)
-
-    model = build_model(backbone, n_filters, dropout, num_layers, vit_dropout).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-    criterion = nn.MSELoss()
-
-    early_stopper = EarlyStopping(patience=3, min_delta=0.001)
-    start_time = time.time()
-    best_val_loss = float("inf")
-    epoch_ran = 0
-    early_stopped = False
-
-    for epoch in range(20):
-        epoch_ran += 1
-        model.train()
-        for inputs, targets in train_loader:
-            inputs, targets = inputs.to(device), targets.to(device).unsqueeze(1)
-            optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = criterion(outputs, targets)
-            loss.backward()
-            optimizer.step()
-
-        model.eval()
-        val_loss = 0.0
-        with torch.no_grad():
-            for inputs, targets in val_loader:
-                inputs, targets = inputs.to(device), targets.to(device).unsqueeze(1)
-                outputs = model(inputs)
-                val_loss += criterion(outputs, targets).item()
-        val_loss /= len(val_loader)
-        best_val_loss = min(best_val_loss, val_loss)
-
-        early_stopper(val_loss)
-        if early_stopper.early_stop:
-            early_stopped = True
-            break
-
-    trial.set_user_attr("epochs", epoch_ran)
-    trial.set_user_attr("early_stopped", early_stopped)
-    trial.set_user_attr("duration_sec", round(time.time() - start_time, 2))
-
-    return best_val_loss
-
-# --- CSV Logger ---
-def log_trial_to_csv(trial, filepath="optuna_trials_log.csv"):
-    header = list(trial.params.keys()) + ["value", "epochs", "early_stopped", "duration_sec"]
-    row = [trial.params.get(k, "NA") for k in trial.params] + [
-        trial.value,
-        trial.user_attrs.get("epochs", "NA"),
-        trial.user_attrs.get("early_stopped", "NA"),
-        trial.user_attrs.get("duration_sec", "NA")
-    ]
-
-    write_header = not os.path.exists(filepath)
-    with open(filepath, mode="a", newline="") as f:
-        writer = csv.writer(f)
-        if write_header:
-            writer.writerow(header)
-        writer.writerow(row)
-
-# --- Callback ---
-def logging_callback(study, trial):
-    log_trial_to_csv(trial)
-
-# --- Run Optimization ---
-if __name__ == "__main__":
-    study = optuna.create_study(direction="minimize")
-    study.optimize(objective, n_trials=30, callbacks=[logging_callback])
-
-    print("Best trial:")
-    for key, value in study.best_trial.params.items():
-        print(f"{key}: {value}")
-    print("Epochs:", study.best_trial.user_attrs["epochs"])
-    print("Early Stopped:", study.best_trial.user_attrs["early_stopped"])
-    print("Duration (sec):", study.best_trial.user_attrs["duration_sec"])
+    def __call__(self, val_loss):
+        if self.best_loss is None:
+            self.best_loss = val_loss
+        elif val_loss > self.best_loss - self.min_delta:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            self.best_loss = val_loss
+            self.counter = 0

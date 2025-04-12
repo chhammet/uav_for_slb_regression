@@ -35,12 +35,13 @@ class BaselineCNN(nn.Module):
         x = self.dropout(torch.relu(self.fc1(x)))
         return self.out(x)
 
-# --- Objective Function (CNN only, AMP, Checkpointing) ---
+# --- Objective Function ---
 def objective(trial):
+    # Expanded search space
     lr = trial.suggest_loguniform("lr", 1e-5, 5e-2)
     weight_decay = trial.suggest_loguniform("weight_decay", 1e-6, 1e-1)
     dropout = trial.suggest_uniform("dropout", 0.0, 0.6)
-    batch_size = trial.suggest_categorical("batch_size", [32, 64, 128, 256, 512])
+    batch_size = trial.suggest_categorical("batch_size", [32, 64, 128, 256])
     n_filters = trial.suggest_categorical("n_filters", [16, 32, 64, 128, 256])
     num_layers = trial.suggest_int("num_layers", 2, 6)
 
@@ -130,9 +131,10 @@ if __name__ == "__main__":
     print("Early Stopped:", study.best_trial.user_attrs["early_stopped"])
     print("Duration (sec):", study.best_trial.user_attrs["duration_sec"])
 
-    # Save visualizations
+    # Save interactive visualizations
     vis.plot_optimization_history(study).write_html("cnn_opt_history.html")
     vis.plot_param_importances(study).write_html("cnn_param_importance.html")
     vis.plot_parallel_coordinate(study).write_html("cnn_parallel_coords.html")
     vis.plot_contour(study).write_html("cnn_contour_plot.html")
     vis.plot_slice(study).write_html("cnn_slice_plot.html")
+
