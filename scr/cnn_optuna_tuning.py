@@ -6,10 +6,9 @@ import time
 import csv
 import os
 
-from torchvision import models
-from transformers import ViTModel, ViTConfig
 from baseline_analysis import split_training_data
 from utils import get_available_gpu, EarlyStopping
+import optuna.visualization as vis
 
 device = get_available_gpu()
 
@@ -36,56 +35,23 @@ class BaselineCNN(nn.Module):
         x = self.dropout(torch.relu(self.fc1(x)))
         return self.out(x)
 
-# --- ViT Wrapper ---
-class ViTWrapper(nn.Module):
-    def __init__(self, vit_model, hidden_size):
-        super().__init__()
-        self.vit = vit_model
-        self.regressor = nn.Sequential(
-            nn.Dropout(0.1),
-            nn.Linear(hidden_size, 1)
-        )
-
-    def forward(self, x):
-        outputs = self.vit(pixel_values=x)
-        cls_token = outputs.last_hidden_state[:, 0, :]
-        return self.regressor(cls_token)
-
-# --- Model Builder ---
-def build_model(backbone, n_filters=16, dropout=0.25, num_layers=2, vit_dropout=0.1):
-    if backbone == "cnn":
-        return BaselineCNN(n_filters, dropout, num_layers)
-    elif backbone == "resnet18":
-        model = models.resnet18(weights=None)
-        model.fc = nn.Linear(model.fc.in_features, 1)
-        return model
-    elif backbone == "vit":
-        config = ViTConfig.from_pretrained("google/vit-base-patch16-224-in21k")
-        config.num_labels = 1
-        config.hidden_dropout_prob = vit_dropout
-        vit_model = ViTModel(config)
-        return ViTWrapper(vit_model, config.hidden_size)
-    else:
-        raise ValueError("Invalid backbone")
-
-# --- Objective Function ---
+# --- Objective Function (CNN only, AMP, Checkpointing) ---
 def objective(trial):
-    backbone = trial.suggest_categorical("backbone", ["cnn", "resnet18", "vit"])
-    lr = trial.suggest_loguniform("lr", 1e-5, 1e-2)
-    weight_decay = trial.suggest_loguniform("weight_decay", 1e-6, 1e-2)
-    dropout = trial.suggest_uniform("dropout", 0.1, 0.5)
-    batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
-    n_filters = trial.suggest_categorical("n_filters", [16, 32, 64]) if backbone == "cnn" else None
-    num_layers = trial.suggest_int("num_layers", 1, 3) if backbone == "cnn" else None
-    vit_dropout = trial.suggest_uniform("vit_dropout", 0.1, 0.4) if backbone == "vit" else None
+    lr = trial.suggest_loguniform("lr", 1e-5, 5e-2)
+    weight_decay = trial.suggest_loguniform("weight_decay", 1e-6, 1e-1)
+    dropout = trial.suggest_uniform("dropout", 0.0, 0.6)
+    batch_size = trial.suggest_categorical("batch_size", [32, 64, 128, 256, 512])
+    n_filters = trial.suggest_categorical("n_filters", [16, 32, 64, 128, 256])
+    num_layers = trial.suggest_int("num_layers", 2, 6)
 
     image_dir = "/mnt/research-projects/j/jlgage/RawUAVData01/data/images"
     csv_path = "/mnt/research-projects/j/jlgage/RawUAVData01/data/all_scored_images_clean.csv"
     train_loader, val_loader, _ = split_training_data(image_dir, csv_path, batch_size=batch_size)
 
-    model = build_model(backbone, n_filters, dropout, num_layers, vit_dropout).to(device)
+    model = BaselineCNN(n_filters, dropout, num_layers).to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     criterion = nn.MSELoss()
+    scaler = torch.cuda.amp.GradScaler()
 
     early_stopper = EarlyStopping(patience=3, min_delta=0.001)
     start_time = time.time()
@@ -99,20 +65,26 @@ def objective(trial):
         for inputs, targets in train_loader:
             inputs, targets = inputs.to(device), targets.to(device).unsqueeze(1)
             optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = criterion(outputs, targets)
-            loss.backward()
-            optimizer.step()
+            with torch.cuda.amp.autocast():
+                outputs = model(inputs)
+                loss = criterion(outputs, targets)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
 
         model.eval()
         val_loss = 0.0
         with torch.no_grad():
             for inputs, targets in val_loader:
                 inputs, targets = inputs.to(device), targets.to(device).unsqueeze(1)
-                outputs = model(inputs)
-                val_loss += criterion(outputs, targets).item()
+                with torch.cuda.amp.autocast():
+                    outputs = model(inputs)
+                    val_loss += criterion(outputs, targets).item()
         val_loss /= len(val_loader)
-        best_val_loss = min(best_val_loss, val_loss)
+
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            torch.save(model.state_dict(), f"best_model_trial_{trial.number}.pt")
 
         early_stopper(val_loss)
         if early_stopper.early_stop:
@@ -126,7 +98,7 @@ def objective(trial):
     return best_val_loss
 
 # --- CSV Logger ---
-def log_trial_to_csv(trial, filepath="optuna_trials_log.csv"):
+def log_trial_to_csv(trial, filepath="cnn_trials_log.csv"):
     header = list(trial.params.keys()) + ["value", "epochs", "early_stopped", "duration_sec"]
     row = [trial.params.get(k, "NA") for k in trial.params] + [
         trial.value,
@@ -146,10 +118,10 @@ def log_trial_to_csv(trial, filepath="optuna_trials_log.csv"):
 def logging_callback(study, trial):
     log_trial_to_csv(trial)
 
-# --- Run Optimization ---
+# --- Run Optimization and Plot ---
 if __name__ == "__main__":
     study = optuna.create_study(direction="minimize")
-    study.optimize(objective, n_trials=30, callbacks=[logging_callback])
+    study.optimize(objective, n_trials=200, callbacks=[logging_callback])
 
     print("Best trial:")
     for key, value in study.best_trial.params.items():
@@ -157,3 +129,10 @@ if __name__ == "__main__":
     print("Epochs:", study.best_trial.user_attrs["epochs"])
     print("Early Stopped:", study.best_trial.user_attrs["early_stopped"])
     print("Duration (sec):", study.best_trial.user_attrs["duration_sec"])
+
+    # Save visualizations
+    vis.plot_optimization_history(study).write_html("cnn_opt_history.html")
+    vis.plot_param_importances(study).write_html("cnn_param_importance.html")
+    vis.plot_parallel_coordinate(study).write_html("cnn_parallel_coords.html")
+    vis.plot_contour(study).write_html("cnn_contour_plot.html")
+    vis.plot_slice(study).write_html("cnn_slice_plot.html")
