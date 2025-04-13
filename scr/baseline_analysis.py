@@ -6,6 +6,7 @@ from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,6 +34,7 @@ class ImageDatasetFromDF(Dataset):
         row = self.dataframe.iloc[idx]
         image_filename = str(row['image'])
         image_score = row['score']
+        sample_id = str(row['sample_id'])  # <-- this line
 
         image_path = os.path.join(self.image_directory, image_filename)
         image = Image.open(image_path).convert('RGB')
@@ -40,7 +42,8 @@ class ImageDatasetFromDF(Dataset):
         if self.transform:
             image = self.transform(image)
 
-        return image, torch.tensor(image_score, dtype=torch.float32)
+        return image, torch.tensor(image_score, dtype=torch.float32), sample_id  # <-- return 3 items
+
 
 
 def create_transforms():
@@ -91,11 +94,41 @@ def split_training_data(image_directory, csv_file, batch_size=32):
     val_dataset = ImageDatasetFromDF(image_directory, val_df, transform=test_transform)
     test_dataset = ImageDatasetFromDF(image_directory, test_df, transform=test_transform)
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True)
 
     return train_loader, val_loader, test_loader
+
+def get_kfold_data_loaders(image_directory, csv_file, batch_size=32, n_splits=5):
+    train_transform, test_transform = create_transforms()
+
+    df = pd.read_csv(csv_file).reset_index(drop=True)
+    kfold = KFold(n_splits=n_splits, shuffle=True, random_state=42)
+
+    folds = []
+    for fold, (train_idx, val_idx) in enumerate(kfold.split(df)):
+        train_subset = ImageDatasetFromDF(
+            image_directory, df.iloc[train_idx].reset_index(drop=True),
+            transform=train_transform
+        )
+        val_subset = ImageDatasetFromDF(
+            image_directory, df.iloc[val_idx].reset_index(drop=True),
+            transform=test_transform
+        )
+
+        train_loader = DataLoader(
+            train_subset, batch_size=batch_size, shuffle=True,
+            num_workers=8, pin_memory=True, persistent_workers=True
+        )
+        val_loader = DataLoader(
+            val_subset, batch_size=batch_size, shuffle=False,
+            num_workers=8, pin_memory=True, persistent_workers=True
+        )
+
+        folds.append((train_loader, val_loader))
+
+    return folds
 
 
 if __name__ == "__main__":
