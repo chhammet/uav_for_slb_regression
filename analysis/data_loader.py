@@ -269,8 +269,8 @@ def split_data(image_directory, csv_file, batch_size=32):
     
     
 if __name__ == "__main__":
-    image_directory = "/Users/thomasbernabe/Documents/gage-lab/uav_for_slb_regression/data/images"
-    csv_file = "/Users/thomasbernabe/Documents/gage-lab/uav_for_slb_regression/data/all_scored_images.csv"
+    image_directory = "C:/Users/tbernab/Documents/gage-lab/uav_for_slb_regression/data/images"
+    csv_file = "C:/Users/tbernab/Documents/gage-lab/uav_for_slb_regression/data/all_scored_images.csv"
     
     train_dataloader, val_dataloader, test_dataloder = split_data(image_directory, csv_file, batch_size=32)
     

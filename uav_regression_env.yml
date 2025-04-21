@@ -9,4 +9,5 @@ dependencies:
   - matplotlib
   - pandas
   - scikit-learn
+  - tqdm
 prefix: /Users/thomasbernabe/anaconda3/envs/drone-analysis

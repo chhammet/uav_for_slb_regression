@@ -18,7 +18,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/Users/thomasbernabe/Documents/gage-lab/uav_for_slb_regression/analysis/data_loader.log'),
+        logging.FileHandler('C:/Users/tbernab/Documents/gage-lab/uav_for_slb_regression/analysis/data_loader.log'),
         logging.StreamHandler()
     ]
 )
@@ -251,7 +251,7 @@ class ImageTrainer:
         
         return avg_test_loss, metrics, all_predictions, all_targets
         
-    def train(self, num_epochs=100, early_stopping_patience=15):
+    def train(self, num_epochs=10, early_stopping_patience=15):
         """
         trains the model for the specific number of epochs (100) 
         with early stopping and model checkpointing
@@ -308,7 +308,7 @@ class ImageTrainer:
                     'val_metrics': val_metrics
                 }, checkpoint_path)
                 
-                model_logger.info(f"New best model saved with validation loss: {val_loss: .f}")
+                model_logger.info(f"New best model saved with validation loss: {val_loss:.4f}")
                 
                 # save intermediate models every 20 epochs --> if there is improvement 
                 if epoch % 20 == 0:
@@ -490,8 +490,8 @@ def main():
     
     model_logger.info("Starting the SLB drone image analysis...")
     
-    image_directory = "/Users/thomasbernabe/Documents/gage-lab/uav_for_slb_regression/data/images"
-    csv_file = "/Users/thomasbernabe/Documents/gage-lab/uav_for_slb_regression/data/all_scored_images.csv"
+    image_directory = "C:/Users/tbernab/Documents/gage-lab/uav_for_slb_regression/data/images"
+    csv_file = "C:/Users/tbernab/Documents/gage-lab/uav_for_slb_regression/data/all_scored_images.csv"
     
     # load data 
     train_dataloader, val_dataloader, test_dataloader = split_data(image_directory, csv_file, batch_size=64)
@@ -514,7 +514,7 @@ def main():
     
     # train model with more epochs and increased patience 
     model_logger.info("Starting the training process")
-    results = trainer.train(num_epochs=100, early_stopping_patience=15)
+    results = trainer.train(num_epochs=10, early_stopping_patience=8)
     
     # export model here ?
     
